@@ -1,30 +1,56 @@
-import React, { useState } from 'react';
+import React, {
+  createContext, useContext, useReducer, useState,
+} from 'react';
 import styled from 'styled-components';
+import filterReducer from './filterReducer';
+import todoReducer from './todoReducer';
+
+const DispatchContext = createContext(null);
 
 const TodoItem = ({
-  index, completeTodo, removeTodo, todo: { text, isCompleted },
-}) => (
-  <StyledTodoItem style={{ textDecoration: isCompleted ? 'line-through' : '' }}>
-    {text}
-    <div>
-      <button type="button" onClick={() => completeTodo(index)}>Complete</button>
-      <button type="button" onClick={() => removeTodo(index)}>X</button>
-    </div>
-  </StyledTodoItem>
-);
+  index, todo: { task, isCompleted },
+}) => {
+  const dispatch = useContext(DispatchContext);
 
-const TodoForm = ({ addTodo }) => {
+  // since we get dispatch from Context, this components can now
+  // dispatch the appropriate action itself and doesn't need to get
+  // a function passed to it from above
+  const changeComplete = () => {
+    dispatch({
+      type: isCompleted ? 'UNDO_TODO' : 'DO_TODO',
+      index,
+    });
+  };
+
+  const removeTodo = () => {
+    dispatch({ type: 'REMOVE_TODO', index });
+  };
+
+  return (
+    <StyledTodoItem style={{ textDecoration: isCompleted ? 'line-through' : '' }}>
+      {task}
+      <div>
+        <button type="button" onClick={changeComplete}>Complete</button>
+        <button type="button" onClick={removeTodo}>X</button>
+      </div>
+    </StyledTodoItem>
+  );
+};
+
+// This is the input form at the bottom of the list for new todos
+const TodoForm = () => {
   const [value, setValue] = useState('');
+  const dispatch = useContext(DispatchContext);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const addTodo = (event) => {
+    event.preventDefault();
     if (!value) return;
-    addTodo(value);
+    dispatch({ type: 'ADD_TODO', task: value });
     setValue('');
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={addTodo}>
       <Input
         type="text"
         value={value}
@@ -35,57 +61,94 @@ const TodoForm = ({ addTodo }) => {
   );
 };
 
+const Filter = () => {
+  // we useContext with our created Context which gives us
+  // the global state i.e. the dispatch function.
+  // this could just as well be an object
+  const dispatch = useContext(DispatchContext);
+
+  const handleShowAll = () => {
+    dispatch({ type: 'SHOW_ALL' });
+  };
+
+  const handleShowComplete = () => {
+    dispatch({ type: 'SHOW_COMPLETE' });
+  };
+
+  const handleShowIncomplete = () => {
+    dispatch({ type: 'SHOW_INCOMPLETE' });
+  };
+  return (
+    <HeadingWrapper>
+      <button type="button" onClick={handleShowAll}>
+        Show All
+      </button>
+      <button type="button" onClick={handleShowComplete}>
+        Show Complete
+      </button>
+      <button type="button" onClick={handleShowIncomplete}>
+        Show Incomplete
+      </button>
+    </HeadingWrapper>
+  );
+};
+
+// This is the whole todo component that wraps the filters, list and input
 const Todo = () => {
-  const [todos, setTodos] = useState([
+  const [todos, dispatchTodos] = useReducer(todoReducer, [
     {
-      text: 'learn about hooks',
+      task: 'learn about hooks',
       isCompleted: false,
     },
     {
-      text: 'design ui for app',
+      task: 'design ui for app',
       isCompleted: false,
     },
     {
-      text: 'write a song',
+      task: 'write a song',
       isCompleted: false,
     },
   ]);
+  const [filter, dispatchFilters] = useReducer(filterReducer, 'ALL');
 
-  const addTodo = (text) => {
-    const newTodos = [...todos, { text }];
-    setTodos(newTodos);
-  };
+  // global dispatch function, this is like combineReducers in Redux
+  const dispatch = action => [dispatchTodos, dispatchFilters].forEach(fn => fn(action));
 
-  const completeTodo = (index) => {
-    const newTodos = [...todos];
-    newTodos[index].isCompleted = true;
-    setTodos(newTodos);
-  };
-  const removeTodo = (index) => {
-    const newTodos = [...todos];
-    newTodos.splice(index, 1);
-    setTodos(newTodos);
-  };
+  const filteredTodos = todos.filter((todo) => {
+    if (filter === 'ALL') {
+      return true;
+    }
+    if (filter === 'COMPLETE' && todo.isCompleted) {
+      return true;
+    }
+    if (filter === 'INCOMPLETE' && !todo.isCompleted) {
+      return true;
+    }
+    return false;
+  });
   return (
-
-    <Wrapper>
-      <ListWrapper>
-        {
-        todos.map((todo, index) => (
-          <TodoItem
-            completeTodo={completeTodo}
-            removeTodo={removeTodo}
-            key={`${index.toString()}${todo.text}`}
-            index={index}
-            todo={todo}
-          />
-        ))
-        }
-        <TodoForm addTodo={addTodo} />
-      </ListWrapper>
-    </Wrapper>
+    // we provide our dispatch function to all components
+    <DispatchContext.Provider value={dispatch}>
+      <Wrapper>
+        <ListWrapper>
+          <Filter />
+          {
+          filteredTodos.map((todo, index) => (
+            <TodoItem
+              key={`${index.toString()}${todo.task}`}
+              index={index}
+              todo={todo}
+            />
+          ))
+          }
+          <TodoForm />
+        </ListWrapper>
+      </Wrapper>
+    </DispatchContext.Provider>
   );
 };
+
+// Some styling
 
 const Wrapper = styled.div`
   width: 100vw;
@@ -95,6 +158,12 @@ const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
+`;
+
+const HeadingWrapper = styled.div`
+  padding: 5px;
+  display: flex;
+  justify-content: space-between;
 `;
 
 const ListWrapper = styled.div`
