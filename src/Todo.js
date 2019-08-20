@@ -231,6 +231,8 @@ const Input = styled.input`
 const Button = styled.button`
   font-size: 14px;
   border-radius: 4px;
+  background: #fff;
+  border: 1px solid rgb(186, 186, 186);
 
   &:hover {
     cursor: pointer;
